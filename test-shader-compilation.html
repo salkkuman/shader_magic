@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shader Compilation Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 20px;
+    }
+    .test-result {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .pass {
+      background: #0a5;
+    }
+    .fail {
+      background: #a00;
+    }
+    pre {
+      background: #000;
+      padding: 10px;
+      overflow: auto;
+      max-height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Shader Compilation Test</h1>
+  <div id="results"></div>
+  
+  <script type="module">
+    const resultsDiv = document.getElementById('results');
+    
+    function addResult(name, passed, message, details = '') {
+      const div = document.createElement('div');
+      div.className = `test-result ${passed ? 'pass' : 'fail'}`;
+      div.innerHTML = `
+        <strong>${name}:</strong> ${passed ? 'PASS' : 'FAIL'}<br>
+        ${message}
+        ${details ? `<pre>${details}</pre>` : ''}
+      `;
+      resultsDiv.appendChild(div);
+    }
+    
+    async function testShaderCompilation() {
+      // Test 1: WebGL2 support
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl2');
+      if (!gl) {
+        addResult('WebGL2 Support', false, 'WebGL2 is not supported in this browser');
+        return;
+      }
+      addResult('WebGL2 Support', true, 'WebGL2 is available');
+      
+      // Test 2: Load and compile vertex shader
+      try {
+        const vertexResponse = await fetch('/src/shaders/main.vert?raw');
+        const vertexSource = await vertexResponse.text();
+        
+        const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, vertexSource);
+        gl.compileShader(vertexShader);
+        
+        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+          const error = gl.getShaderInfoLog(vertexShader);
+          addResult('Vertex Shader Compilation', false, 
+            'Vertex shader failed to compile', 
+            `Error: ${error || '(No error message)'}\n\nSource:\n${vertexSource.substring(0, 500)}...`);
+        } else {
+          addResult('Vertex Shader Compilation', true, 'Vertex shader compiled successfully');
+        }
+        gl.deleteShader(vertexShader);
+      } catch (error) {
+        addResult('Vertex Shader Load', false, `Failed to load vertex shader: ${error.message}`);
+      }
+      
+      // Test 3: Load and compile fragment shader
+      try {
+        const fragmentResponse = await fetch('/src/shaders/main.frag?raw');
+        const fragmentSource = await fragmentResponse.text();
+        
+        const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader, fragmentSource);
+        gl.compileShader(fragmentShader);
+        
+        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+          const error = gl.getShaderInfoLog(fragmentShader);
+          
+          // Try to extract line number from error
+          let errorDetails = `Error: ${error || '(No error message)'}`;
+          if (error) {
+            const lineMatch = error.match(/ERROR:\s*\d+:(\d+)/);
+            if (lineMatch) {
+              const lineNum = parseInt(lineMatch[1]);
+              const lines = fragmentSource.split('\n');
+              if (lineNum > 0 && lineNum <= lines.length) {
+                const contextStart = Math.max(0, lineNum - 5);
+                const contextEnd = Math.min(lines.length, lineNum + 5);
+                const context = lines.slice(contextStart, contextEnd)
+                  .map((line, idx) => {
+                    const actualLine = contextStart + idx + 1;
+                    const marker = actualLine === lineNum ? ' >>> ' : '     ';
+                    return `${marker}${actualLine.toString().padStart(4, ' ')}: ${line}`;
+                  })
+                  .join('\n');
+                errorDetails += `\n\nContext around line ${lineNum}:\n${context}`;
+              }
+            }
+          }
+          
+          addResult('Fragment Shader Compilation', false, 
+            'Fragment shader failed to compile', 
+            errorDetails);
+        } else {
+          addResult('Fragment Shader Compilation', true, 'Fragment shader compiled successfully');
+        }
+        gl.deleteShader(fragmentShader);
+      } catch (error) {
+        addResult('Fragment Shader Load', false, `Failed to load fragment shader: ${error.message}`);
+      }
+      
+      // Test 4: Test other shaders
+      const otherShaders = [
+        { name: 'Bloom Fragment', path: '/src/shaders/bloom.frag?raw' },
+        { name: 'Composite Fragment', path: '/src/shaders/composite.frag?raw' }
+      ];
+      
+      for (const shaderInfo of otherShaders) {
+        try {
+          const response = await fetch(shaderInfo.path);
+          const source = await response.text();
+          
+          const shader = gl.createShader(gl.FRAGMENT_SHADER);
+          gl.shaderSource(shader, source);
+          gl.compileShader(shader);
+          
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            const error = gl.getShaderInfoLog(shader);
+            addResult(shaderInfo.name, false, 
+              `${shaderInfo.name} failed to compile`, 
+              `Error: ${error || '(No error message)'}`);
+          } else {
+            addResult(shaderInfo.name, true, `${shaderInfo.name} compiled successfully`);
+          }
+          gl.deleteShader(shader);
+        } catch (error) {
+          addResult(shaderInfo.name + ' Load', false, `Failed to load ${shaderInfo.name}: ${error.message}`);
+        }
+      }
+    }
+    
+    testShaderCompilation();
+  </script>
+</body>
+</html>
