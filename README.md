@@ -1,6 +1,7 @@
 # Shader Magic 2026
 
 A minimal WebGL2 fullscreen demo engine (ShaderToy-like) built with TypeScript and Vite. Pure WebGL2, no frameworks - just shaders and canvas.
+DEMO: https://www.youtube.com/watch?v=C4FEHkeJpEg
 
 ## Features
 
@@ -109,3 +110,4 @@ Available uniforms in fragment shaders:
 ## License
 
 MIT
+
